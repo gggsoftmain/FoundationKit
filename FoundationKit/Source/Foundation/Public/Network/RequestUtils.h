@@ -24,6 +24,9 @@ struct FAccountInfoJson;
 struct FBalanceResultJson;
 struct FTokenAccountArrayJson;
 struct FProgramAccountJson;
+struct FPublicKey;
+
+DECLARE_DELEGATE_OneParam(FConfirmTransactionCallback, bool);
 
 class FOUNDATION_API FRequestUtils
 {
@@ -52,10 +55,18 @@ public:
 
 	static FRequestData* GetTransactionFeeAmount(const FString& transaction);
 	static int ParseTransactionFeeAmountResponse(const FJsonObject& data);
+
+	static FRequestData* GetMinimumBalanceForRentExemption(const UINT& size);
+	static int64 ParseMinimumBalanceForRentExemptionResponse(const FJsonObject& data);
 	
 	static FRequestData* SendTransaction(const FString& transaction);
 	static FString ParseTransactionResponse(const FJsonObject& data);
+
+	static FRequestData* GetSignatureStatuses(const FString& hash);
+	static bool ParseGetSignatureStatusesResponse(const FJsonObject& data);
 	
+	static void ConfirmTransaction(UWorld* world, const FString& hash, FConfirmTransactionCallback callback);
+
 	static FRequestData* RequestAirDrop(const FString& pubKey);
 
 	static void DisplayError(const FString& error);

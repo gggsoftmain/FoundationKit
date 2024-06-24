@@ -32,24 +32,19 @@ FTransaction::FTransaction(const FString& currentBlockHash)
 	ReadOnlyUnsignedAccounts = 0;
 }
 
+void FTransaction::SetFeePayer(const FPublicKey& feePayer)
+{
+	FeePayer = feePayer;
+}
+
 void FTransaction::AddInstruction(const FInstructionData& instruction)
 {
 	Instructions.Add(instruction);
 	for( const FAccountMeta& data: instruction.Keys)
 	{
-		int index = AccountList.IndexOfByPredicate([data](const FAccountMeta& entry){ return data.PublicKeyData == entry.PublicKeyData; } );
-		if(index == INDEX_NONE)
-		{
-			AccountList.Add(data);
-		}
-		else
-		{
-			if( data.Writable && !AccountList[index].Writable )
-			{
-				AccountList[index] = data;
-			}
-		}
+		AddAccountData(data);
 	}
+	AddAccountData(FAccountMeta(instruction.ProgramId, false, false));
 }
 
 void FTransaction::AddInstructions(const TArray<FInstructionData>& instructions)
@@ -61,11 +56,11 @@ void FTransaction::AddInstructions(const TArray<FInstructionData>& instructions)
 	}
 }
 
-uint8 FTransaction::GetAccountIndex(const FString& key) const
+int FTransaction::GetAccountIndex(const FString& key) const
 {
 	return AccountList.IndexOfByPredicate([key](const FAccountMeta& data)
 	{
-		return data.PublicKey == key;
+		return data.PublicKey.GetKey() == key;
 	});
 }
 
@@ -88,28 +83,78 @@ TArray<uint8> FTransaction::Build(const TArray<FAccount>& signers)
 	return result;
 }
 
+void FTransaction::AddAccountData(const FAccountMeta& accountMeta)
+{
+	int index = GetAccountIndex(accountMeta.PublicKey.GetKey());
+	if (index == INDEX_NONE)
+	{
+		AccountList.Add(accountMeta);
+	}
+	else if (!AccountList[index].Signer && accountMeta.Signer)
+	{
+		AccountList[index].Signer = true;
+		AccountList[index].Writable = AccountList[index].Writable || accountMeta.Writable;
+	}
+	else if (!AccountList[index].Writable && accountMeta.Writable)
+	{
+		AccountList[index].Writable = true;
+	}
+}
+
 void FTransaction::UpdateAccountList(const TArray<FAccount>& signers)
 {
-	for (const FAccount& account : signers)
-	{
-		int index = 0;
-		while( index != INDEX_NONE )
+	AccountList.Sort([](const FAccountMeta& A, const FAccountMeta& B) {
+		if (A.Signer != B.Signer)
 		{
-			index = AccountList.IndexOfByPredicate([account](const FAccountMeta& entry){ return account.PublicKeyData == entry.PublicKeyData; } );
-			if( index != INDEX_NONE )
-			{
-				AccountList.RemoveAt(index);
-			}
+			return A.Signer && !B.Signer;
+		}
+		if (A.Writable != B.Writable)
+		{
+			return A.Writable && !B.Writable;
+		}
+		// Otherwise, sort by pubkey, stringwise.
+		return A.PublicKey.GetKey().Compare(B.PublicKey.GetKey(), ESearchCase::CaseSensitive) <= 0;
+	});
+
+	TArray<FAccountMeta> newList;
+	if (FeePayer.GetIsValid())
+	{
+		int feePayerIndex = GetAccountIndex(FeePayer.GetKey());
+		if (feePayerIndex == INDEX_NONE)
+		{
+			newList.Add(FAccountMeta(FeePayer, true, true));
+		}
+		else
+		{
+			AccountList.RemoveAt(feePayerIndex);
+			newList.Add(FAccountMeta(FeePayer, true, true));
 		}
 	}
 
-	//Sort writables to the top of list before readding Signers at the very top
-	AccountList.Sort([](const FAccountMeta& A, const FAccountMeta& B) { return A.Writable && !B.Writable; });
+	newList.Append(AccountList);
+	AccountList = newList;
+	//AccountList.Sort([](const FAccountMeta& A, const FAccountMeta& B) { return A.Writable && !B.Writable; });
 
-	for (int i = 0; i < signers.Num(); i++)
-	{
-		AccountList.Insert( FAccountMeta( signers[i].PublicKeyData, true, true), i);
-	}
+	//for (const FAccount& account : signers)
+	//{
+	//	int index = 0;
+	//	while( index != INDEX_NONE )
+	//	{
+	//		index = AccountList.IndexOfByPredicate([account](const FAccountMeta& entry){ return account.PublicKey == entry.PublicKeyData; } );
+	//		if( index != INDEX_NONE )
+	//		{
+	//			AccountList.RemoveAt(index);
+	//		}
+	//	}
+	//}
+
+	////Sort writables to the top of list before readding Signers at the very top
+	//AccountList.Sort([](const FAccountMeta& A, const FAccountMeta& B) { return A.Writable && !B.Writable; });
+
+	//for (int i = 0; i < signers.Num(); i++)
+	//{
+	//	AccountList.Insert( FAccountMeta( signers[i].PublicKey.GetKeyData(), true, true), i);
+	//}
 }
 
 TArray<uint8> FTransaction::BuildMessage()
@@ -118,7 +163,7 @@ TArray<uint8> FTransaction::BuildMessage()
     for (FAccountMeta& accountMeta : AccountList)
     {
     	//Need to remove feepayer here????
-        accountKeysBuffer.Append(accountMeta.PublicKeyData);
+        accountKeysBuffer.Append(accountMeta.PublicKey.GetKeyData());
 		UpdateHeaderInfo(accountMeta);
     }
 
@@ -145,16 +190,16 @@ TArray<uint8> FTransaction::CompileInstructions()
 	
 	for (FInstructionData& instruction: Instructions)
 	{
-		const int keyCount = instruction.Keys.Num() - 1;
+		const int keyCount = instruction.Keys.Num();
 		TArray<uint8> keyIndices;
 		keyIndices.SetNum(keyCount);
 	
 		for (int i = 0; i < keyCount; i++)
 		{
-			keyIndices[i] = GetAccountIndex(instruction.Keys[i].PublicKey);
+			keyIndices[i] = GetAccountIndex(instruction.Keys[i].PublicKey.GetKey());
 		}
 
-		result.Add(GetAccountIndex(FBase58::EncodeBase58(instruction.ProgramId.GetData(),instruction.ProgramId.Num())));
+		result.Add(GetAccountIndex(instruction.ProgramId.GetKey()));
 		result.Append(FCryptoUtils::ShortVectorEncodeLength(keyCount));
 		result.Append(keyIndices);
 		result.Append(FCryptoUtils::ShortVectorEncodeLength(instruction.Data.Num()));

@@ -62,12 +62,13 @@ void FRequestManager::SendRequest(FRequestData* RequestData)
 
 void FRequestManager::OnResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess)
 {
-	FString response = Response->GetContentAsString();
 	if (!bSuccess)
 	{
 		FRequestUtils::DisplayError("Http Request Failed");
 		return;
 	}
+
+	FString response = Response->GetContentAsString();
 
 	TSharedPtr<FJsonObject> ParsedJSON;
 	TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<>::Create(Response.Get()->GetContentAsString());
@@ -92,7 +93,19 @@ void FRequestManager::OnResponse(FHttpRequestPtr Request, FHttpResponsePtr Respo
 		else
 		{
 			const TSharedPtr<FJsonObject> error = ParsedJSON->GetObjectField("error");
-			FRequestUtils::DisplayError(error->GetStringField("message"));
+			FString errorMessage = error->GetStringField("message");
+			FRequestUtils::DisplayError(errorMessage);
+
+			int id = ParsedJSON->GetIntegerField("id");
+			FRequestData* request = *PendingRequests.FindByPredicate([&](FRequestData* data) {return data->Id == id; });
+			if (request)
+			{
+				PendingRequests.Remove(request);
+				if (request->ErrorCallback.IsBound())
+				{
+					request->ErrorCallback.Execute(errorMessage);
+				}
+			}
 		}
 	}
 	else

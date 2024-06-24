@@ -22,30 +22,22 @@ Author: Jon Sawler
 #include "Crypto/Base58.h"
 #include "Crypto/CryptoUtils.h"
 #include "SolanaUtils/Utils/Types.h"
+#include "SolanaUtils/Program/CommonPrograms.h"
 
-constexpr int32 SystemProgramIndex_CreateAccount = 0;
-constexpr int32 SystemProgramIndex_Transfer = 2;
-
-constexpr int32 TokenProgramIndex_InitializeAccount = 1;
-constexpr int32 TokenProgramIndex_Transfer = 3;
-
-const FString SysvarRentPublicKey = "SysvarRent111111111111111111111111111111111";
+const FPublicKey SysvarRentPublicKey("SysvarRent111111111111111111111111111111111");
 
 FInstructionData FInstruction::TransferLamports(const FAccount& from, const FAccount& to, int64 lamports)
 {
 	FInstructionData result;
 
-	TArray<uint8> SystemProgramId;
-	SystemProgramId.SetNumZeroed(PublicKeySize);
+	result.ProgramId = FSystemProgram::ProgramIdKey;
 	
-	result.ProgramId.Append(SystemProgramId);
-	
-	result.Keys.Add(FAccountMeta( from.PublicKeyData, true, true));
-	result.Keys.Add(FAccountMeta( to.PublicKeyData, false, true));
+	result.Keys.Add(FAccountMeta( from.PublicKey, true, true));
+	result.Keys.Add(FAccountMeta( to.PublicKey, false, true));
 
 	result.Keys.Add(FAccountMeta( result.ProgramId, false, false));
 	
-	result.Data.Append(FCryptoUtils::Int32ToDataArray(SystemProgramIndex_Transfer));
+	result.Data.Append(FCryptoUtils::Int32ToDataArray((int)ESystemInstruction::Transfer));
 	result.Data.Append(FCryptoUtils::Int64ToDataArray(lamports));
 	
 	return result;
@@ -55,38 +47,35 @@ FInstructionData FInstruction::CreateAccount(const FAccount& from, const FAccoun
 {
 	FInstructionData result;
 
-	TArray<uint8> systemProgramId;
-	systemProgramId.SetNumZeroed(PublicKeySize);
+	result.ProgramId = FSystemProgram::ProgramIdKey;
 	
-	result.ProgramId.Append(systemProgramId);
-	
-	result.Keys.Add(FAccountMeta( from.PublicKeyData, true, true));
-	result.Keys.Add(FAccountMeta( newAccount.PublicKeyData, true, true));
+	result.Keys.Add(FAccountMeta( from.PublicKey, true, true));
+	result.Keys.Add(FAccountMeta( newAccount.PublicKey, true, true));
 	
 	result.Keys.Add(FAccountMeta( result.ProgramId, false, false));
 	
-	result.Data.Append(FCryptoUtils::Int32ToDataArray(SystemProgramIndex_CreateAccount));
+	result.Data.Append(FCryptoUtils::Int32ToDataArray((int)ESystemInstruction::CreateAccount));
 	result.Data.Append(FCryptoUtils::Int64ToDataArray(rent));
 	result.Data.Append(FCryptoUtils::Int64ToDataArray(AccountDataSize));
-	result.Data.Append(FBase58::DecodeBase58(TokenProgramId));
+	result.Data.Append(FTokenProgram::ProgramIdKey.GetKeyData());
 	
 	return result;
 }
 
-FInstructionData FInstruction::InitializeTokenAccount(const FAccount& account, const TArray<uint8>& mint, const FAccount& owner)
+FInstructionData FInstruction::InitializeTokenAccount(const FAccount& account, const FPublicKey& mint, const FAccount& owner)
 {
 	FInstructionData result;
 
-	result.ProgramId.Append(FBase58::DecodeBase58(TokenProgramId));
+	result.ProgramId = FTokenProgram::ProgramIdKey;
 	
-	result.Keys.Add(FAccountMeta( account.PublicKeyData, false, true));
+	result.Keys.Add(FAccountMeta( account.PublicKey, false, true));
 	result.Keys.Add(FAccountMeta( mint, false, false));
-	result.Keys.Add(FAccountMeta( owner.PublicKeyData, false, false));
-	result.Keys.Add(FAccountMeta( FBase58::DecodeBase58(SysvarRentPublicKey), false, false));
+	result.Keys.Add(FAccountMeta( owner.PublicKey, false, false));
+	result.Keys.Add(FAccountMeta( SysvarRentPublicKey, false, false));
 
 	result.Keys.Add(FAccountMeta( result.ProgramId, false, false));
 	
-	result.Data.Add(TokenProgramIndex_InitializeAccount);
+	result.Data.Add((int)ETokenInstruction::InitializeAccount);
 	
 	return result;
 }
@@ -95,17 +84,188 @@ FInstructionData FInstruction::TransferTokens(const FAccount& from, const FAccou
 {
 	FInstructionData result;
 	
-	result.ProgramId.Append(FBase58::DecodeBase58(TokenProgramId));
+	result.ProgramId = FTokenProgram::ProgramIdKey;
 	
-	result.Keys.Add(FAccountMeta( from.PublicKeyData, false, true));
-	result.Keys.Add(FAccountMeta( to.PublicKeyData, false, true));
-	result.Keys.Add(FAccountMeta( owner.PublicKeyData, true, false));
+	result.Keys.Add(FAccountMeta( from.PublicKey, false, true));
+	result.Keys.Add(FAccountMeta( to.PublicKey, false, true));
+	result.Keys.Add(FAccountMeta( owner.PublicKey, true, false));
 	
 	result.Keys.Add(FAccountMeta( result.ProgramId, false, false));
 
 	//Finish this
-	result.Data.Add(TokenProgramIndex_Transfer);
+
+	result.Data.Add((int)ETokenInstruction::Transfer);
 	result.Data.Append(FCryptoUtils::Int64ToDataArray(amount));
 	
+	return result;
+}
+
+
+FInstructionData FInstruction::CreateSystemAccount(const FAccount& from, const FAccount& newAccount, int64 rent, int64 accountDataSize)
+{
+	FInstructionData result;
+
+	result.ProgramId = FSystemProgram::ProgramIdKey;
+
+	result.Keys.Add(FAccountMeta(from.PublicKey, true, true));
+	result.Keys.Add(FAccountMeta(newAccount.PublicKey, true, true));
+
+	result.Keys.Add(FAccountMeta(result.ProgramId, false, false));
+
+	result.Data.Append(FCryptoUtils::Int32ToDataArray((int)ESystemInstruction::CreateAccount));
+	result.Data.Append(FCryptoUtils::Int64ToDataArray(rent));
+	result.Data.Append(FCryptoUtils::Int64ToDataArray(accountDataSize));
+	result.Data.Append(FTokenProgram::ProgramIdKey.GetKeyData());
+
+	return result;
+}
+
+FInstructionData FInstruction::CreateSystemAccount(const FPublicKey& from, const FPublicKey& newAccount, int64 rent, int64 accountDataSize, const FPublicKey& programId)
+{
+	FInstructionData result;
+
+	result.Keys.Add(FAccountMeta(from, true, true));
+	result.Keys.Add(FAccountMeta(newAccount, true, true));
+
+	result.ProgramId = FSystemProgram::ProgramIdKey;
+
+	result.Data.Append(FCryptoUtils::Int32ToDataArray((int)ESystemInstruction::CreateAccount));
+	result.Data.Append(FCryptoUtils::Int64ToDataArray(rent));
+	result.Data.Append(FCryptoUtils::Int64ToDataArray(accountDataSize));
+	result.Data.Append(programId.GetKeyData());
+
+	return result;
+}
+
+FInstructionData FInstruction::TokenProgramInitializeMint(const FPublicKey& mint, int decimals, const FPublicKey& mintAuthority, const FPublicKey* freezeAuthority)
+{
+	FInstructionData result;
+
+	result.Keys.Add(FAccountMeta(mint, false, true));
+	result.Keys.Add(FAccountMeta(SysvarRentPublicKey, false, false));
+
+	result.ProgramId = FTokenProgram::ProgramIdKey;
+
+	int freezeAuthorityOpt = freezeAuthority ? 1 : 0;
+	result.Data.Add((uint8)ETokenInstruction::InitializeMint);
+	result.Data.Add((uint8)decimals);
+	result.Data.Append(mintAuthority.GetKeyData());
+	result.Data.Add((uint8)freezeAuthorityOpt);
+	result.Data.Append(freezeAuthority? freezeAuthority->GetKeyData() : FAccount::Create().PublicKey.GetKeyData());
+
+	return result;
+}
+
+FInstructionData FInstruction::TokenProgramMintTo(const FPublicKey& mint, const FPublicKey& destination, int64 amount, const FPublicKey& mintAuthority)
+{
+	FInstructionData result;
+
+	result.Keys.Add(FAccountMeta(mint, false, true));
+	result.Keys.Add(FAccountMeta(destination, false, true));
+	result.Keys.Add(FAccountMeta(mintAuthority, true, false));
+
+	result.ProgramId = FTokenProgram::ProgramIdKey;
+
+	result.Data.Add((uint8)ETokenInstruction::MintTo);
+	result.Data.Append(FCryptoUtils::Int64ToDataArray(amount));
+
+	return result;
+}
+
+FInstructionData FInstruction::CreateAssociatedTokenAccount(const FPublicKey& payer, const FPublicKey& owner, const FPublicKey& mint)
+{
+	FPublicKey associatedToken = FATAProgram::GetAssociatedTokenAddress(owner, mint);
+
+	FInstructionData result;
+
+	result.Keys.Add(FAccountMeta(payer, true, true));
+	result.Keys.Add(FAccountMeta(associatedToken, false, true));
+	result.Keys.Add(FAccountMeta(owner, false, false));
+	result.Keys.Add(FAccountMeta(mint, false, false));
+	result.Keys.Add(FAccountMeta(FSystemProgram::ProgramIdKey, false, false));
+	result.Keys.Add(FAccountMeta(FTokenProgram::ProgramIdKey, false, false));
+	result.Keys.Add(FAccountMeta(SysvarRentPublicKey, false, false));
+
+	result.ProgramId = FATAProgram::ProgramIdKey;
+
+	return result;
+}
+
+FInstructionData FInstruction::CreateMetadataAccount(const FPublicKey& metadataPDA, const FPublicKey& mint, const FPublicKey& authority, 
+	const FPublicKey& payer, const FPublicKey& updateAuthority, const FNFTMetadata& data, bool isMutable, bool updateAuthorityIsSigner, uint64 collectionDetails)
+{
+	FInstructionData result;
+	
+	result.Keys.Add(FAccountMeta(metadataPDA, false, true));
+	result.Keys.Add(FAccountMeta(mint, false, false));
+	result.Keys.Add(FAccountMeta(authority, true, false));
+	result.Keys.Add(FAccountMeta(payer, true, true));
+	result.Keys.Add(FAccountMeta(updateAuthority, updateAuthorityIsSigner, false));
+	result.Keys.Add(FAccountMeta(FSystemProgram::ProgramIdKey, false, false));
+	result.Keys.Add(FAccountMeta(SysvarRentPublicKey, false, false));
+
+	result.ProgramId = FMetadataProgram::ProgramIdKey;
+
+	result.Data.Add(33);	// CreateMetadataAccountV3
+	
+	TArray<uint8> strdata = FCryptoUtils::FStringToUint8(data.Name);
+	result.Data.Append(FCryptoUtils::Int32ToDataArray(strdata.Num()));
+	result.Data.Append(strdata);
+
+	strdata = FCryptoUtils::FStringToUint8(data.Symbol);
+	result.Data.Append(FCryptoUtils::Int32ToDataArray(strdata.Num()));
+	result.Data.Append(strdata);
+
+	strdata = FCryptoUtils::FStringToUint8(data.Uri);
+	result.Data.Append(FCryptoUtils::Int32ToDataArray(strdata.Num()));
+	result.Data.Append(strdata);
+
+	result.Data.Append(FCryptoUtils::ShortToDataArray((short)data.SellerFeeBasisPoints));
+
+	result.Data.Add(1);	// creators
+	result.Data.Append(FCryptoUtils::Int32ToDataArray(data.Creators.Num()));
+	for (int i = 0; i < data.Creators.Num(); ++i) 
+	{
+		result.Data.Append(data.Creators[i].Encode());
+	}
+
+	result.Data.Add(0);	// No Collection link
+	result.Data.Add(0);	// Not consumable
+
+	result.Data.Add(isMutable?1:0);
+
+	if (collectionDetails == 0) 
+	{
+		result.Data.Add(0);	// No collection details
+	}
+	else
+	{
+		result.Data.Add(1);
+		result.Data.Add(0);
+		result.Data.Append(FCryptoUtils::Int64ToDataArray(collectionDetails));
+	}
+	
+	return result;
+}
+
+FInstructionData FInstruction::CreateMasterEdition(const FPublicKey& masterEditionPAD, const FPublicKey& mint, const FPublicKey& payer, 
+	const FPublicKey& updateAuthority, const FPublicKey& mintAuthority, const FPublicKey& metadataPDA)
+{
+	FInstructionData result;
+
+	result.Keys.Add(FAccountMeta(masterEditionPAD, false, true));
+	result.Keys.Add(FAccountMeta(mint, false, true));
+	result.Keys.Add(FAccountMeta(updateAuthority, true, false));
+	result.Keys.Add(FAccountMeta(mintAuthority, true, false));
+	result.Keys.Add(FAccountMeta(payer, true, false));
+	result.Keys.Add(FAccountMeta(metadataPDA, false, false));
+	result.Keys.Add(FAccountMeta(FTokenProgram::ProgramIdKey, false, false));
+	result.Keys.Add(FAccountMeta(FSystemProgram::ProgramIdKey, false, false));
+	result.Keys.Add(FAccountMeta(SysvarRentPublicKey, false, false));
+
+	result.ProgramId = FMetadataProgram::ProgramIdKey;
+
+	result.Data.Add(17);	// CreateMasterEditionV3
+	result.Data.Add(0);
 	return result;
 }

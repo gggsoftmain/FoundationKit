@@ -24,6 +24,7 @@ Contributers: Daniele Calanna, Federico Arona
 #include "Network/RequestUtils.h"
 #include "Utils/TransactionUtils.h"
 #include "SolanaUtils/Utils/Types.h"
+#include "SolanaUtils/Program/CommonPrograms.h"
 
 UWallet::UWallet()
 {
@@ -37,7 +38,7 @@ UWallet::~UWallet()
 void UWallet::SetPublicKey( const FString& pubKey )
 {
 	PublicKey = pubKey;
-	Account.PublicKey = pubKey;
+	Account.PublicKey.SetKey(pubKey);
 }
 
 bool UWallet::IsValidPublicKey( const FString& pubKey )
@@ -116,7 +117,7 @@ void UWallet::UpdateAllTokenAccounts()
 {
 	if( IsValidPublicKey(PublicKey) )
 	{
-		FRequestData* request = FRequestUtils::RequestAllTokenAccounts(PublicKey, TokenProgramId);
+		FRequestData* request = FRequestUtils::RequestAllTokenAccounts(PublicKey, FTokenProgram::ProgramIdKey.GetKey());
 		request->Callback.BindLambda([this](const FJsonObject& data)
 		{
 			TokenAccounts.Empty();
@@ -203,7 +204,7 @@ void UWallet::SendSOLEstimate(const FAccount& from, const FAccount& to, int64 am
 
 void UWallet::SendTokenEstimate(const FAccount& from, const FAccount& to, const FString& mint, int64 amount) const
 {
-	FRequestData* accountRequest = FRequestUtils::RequestTokenAccount(to.PublicKey, mint);
+	FRequestData* accountRequest = FRequestUtils::RequestTokenAccount(to.PublicKey.GetKey(), mint);
 	accountRequest->Callback.BindLambda([this, from, to, amount, mint](const FJsonObject& data)
 	{
 		FString existingAccount = FRequestUtils::ParseTokenAccountResponse(data);
@@ -232,7 +233,7 @@ void UWallet::SendTokenEstimate(const FAccount& from, const FAccount& to, const 
 
 void UWallet::SendToken(const FAccount& from, const FAccount& to, const FString& mint, int64 amount) const
 {
-	FRequestData* accountRequest = FRequestUtils::RequestTokenAccount(to.PublicKey, mint);
+	FRequestData* accountRequest = FRequestUtils::RequestTokenAccount(to.PublicKey.GetKey(), mint);
 	accountRequest->Callback.BindLambda([this, from, to, amount, mint](const FJsonObject& data)
 	{
 		FString existingAccount = FRequestUtils::ParseTokenAccountResponse(data);

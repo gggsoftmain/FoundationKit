@@ -24,6 +24,7 @@ Author: Jon Sawler
 #include "SolanaUtils/Mnemonic.h"
 #include "SolanaUtils/Transaction.h"
 #include "SolanaUtils/Account.h"
+#include "SolanaUtils/Program/CommonPrograms.h"
 
 TArray<uint8> FTransactionUtils::TransferSOLTransaction(const FAccount& from, const FAccount& to, int64 amount, const FString& blockHash)
 {
@@ -48,7 +49,7 @@ TArray<uint8> FTransactionUtils::TransferTokenTransaction(const FAccount& from, 
 		signers.Add(newKeypair);
 		
 		transaction.AddInstruction(FInstruction::CreateAccount(owner, newKeypair, newAccountSize));
-		transaction.AddInstruction(FInstruction::InitializeTokenAccount(newKeypair, FBase58::DecodeBase58(mint), to));
+		transaction.AddInstruction(FInstruction::InitializeTokenAccount(newKeypair, FPublicKey(mint), to));
 		transaction.AddInstruction(FInstruction::TransferTokens(from, newKeypair, owner, amount));
 	}
 	else
@@ -57,5 +58,26 @@ TArray<uint8> FTransactionUtils::TransferTokenTransaction(const FAccount& from, 
 		transaction.AddInstruction(FInstruction::TransferTokens(from, FAccount::FromPublicKey(existingAccount), owner, amount));
 	}
 	
+	return transaction.Build(signers);
+}
+
+TArray<uint8> FTransactionUtils::MintingTransaction(const FAccount& owner, const FAccount& mint, const FPublicKey& associatedTokenAccount,
+	int64 minimumRent, const FString& blockHash, const FNFTMetadata& metadata)
+{
+	TArray<FAccount> signers;
+	
+	signers.Add(owner);
+	signers.Add(mint);
+
+	FTransaction transaction(blockHash);
+	transaction.SetFeePayer(owner.PublicKey);
+
+	transaction.AddInstruction(FInstruction::CreateSystemAccount(owner.PublicKey, mint.PublicKey, minimumRent, MintAccountDataSize, FTokenProgram::ProgramIdKey));
+	transaction.AddInstruction(FInstruction::TokenProgramInitializeMint(mint.PublicKey, 0, owner.PublicKey, &owner.PublicKey));
+	transaction.AddInstruction(FInstruction::CreateAssociatedTokenAccount(owner.PublicKey, owner.PublicKey, mint.PublicKey));
+	transaction.AddInstruction(FInstruction::TokenProgramMintTo(mint.PublicKey, associatedTokenAccount, 1, owner.PublicKey));
+	transaction.AddInstruction(FInstruction::CreateMetadataAccount(FPublicKey::FindMetadataPDA(mint.PublicKey), mint.PublicKey, owner.PublicKey, owner.PublicKey, owner.PublicKey, metadata, true, true, 0));
+	transaction.AddInstruction(FInstruction::CreateMasterEdition(FPublicKey::FindMasterEditionPDA(mint.PublicKey), mint.PublicKey, owner.PublicKey, owner.PublicKey, owner.PublicKey, FPublicKey::FindMetadataPDA(mint.PublicKey)));
+
 	return transaction.Build(signers);
 }

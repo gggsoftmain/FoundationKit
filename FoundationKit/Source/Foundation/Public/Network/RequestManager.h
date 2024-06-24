@@ -24,7 +24,7 @@ Contributers: Daniele Calanna, Riccardo Torrisi
 #include "Interfaces/IHttpRequest.h"
 
 DECLARE_DELEGATE_OneParam( RequestCallback, FJsonObject&);
-DECLARE_DELEGATE_OneParam( RequestErrorCallback, const FText& FailureReason);
+DECLARE_DELEGATE_OneParam( RequestErrorCallback, const FString& FailureReason);
 
 typedef TFunctionRef<void(FJsonObject&)> RequestCB;
 
@@ -42,6 +42,13 @@ struct FOUNDATION_API FRequestData
 class FOUNDATION_API FRequestManager
 {
 public:
+	enum Commitment
+	{
+		Finalized,
+		Confirmed,
+		Processed,
+		None
+	};
 
 	static int64 GetNextMessageID();
 	static int64 GetLastMessageID();

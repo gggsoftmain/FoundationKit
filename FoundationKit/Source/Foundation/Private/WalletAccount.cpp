@@ -24,6 +24,7 @@ Contributers: Riccardo Torrisi, Federico Arona
 #include "Network/RequestManager.h"
 #include "Network/RequestUtils.h"
 #include "SolanaUtils/Utils/TransactionUtils.h"
+#include "SolanaUtils/Program/CommonPrograms.h"
 
 void UWalletAccount::SetAccountName(const FString& Name)
 {
@@ -42,7 +43,7 @@ void UWalletAccount::Update()
 
 void UWalletAccount::UpdateData()
 {
-	FRequestData* request = FRequestUtils::RequestAccountInfo(AccountData.PublicKey);
+	FRequestData* request = FRequestUtils::RequestAccountInfo(AccountData.PublicKey.GetKey());
 	request->Callback.BindLambda( [this](FJsonObject& data)
 	{
 		const FAccountInfoJson response = FRequestUtils::ParseAccountInfoResponse(data);
@@ -53,7 +54,7 @@ void UWalletAccount::UpdateData()
 
 void UWalletAccount::UpdateTokenAccounts()
 {
-	FRequestData* request = FRequestUtils::RequestAllTokenAccounts(AccountData.PublicKey, "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+	FRequestData* request = FRequestUtils::RequestAllTokenAccounts(AccountData.PublicKey.GetKey(), FTokenProgram::ProgramIdName.ToString());
 	request->Callback.BindLambda([this](FJsonObject& data)
 	{
 		TokenAccounts.Empty();

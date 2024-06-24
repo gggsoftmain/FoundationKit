@@ -87,12 +87,14 @@ bool USolanaWallet::SetSaveSlotName(FString NewSaveSlotName)
 		const UWalletSaveData* SaveData = Cast<UWalletSaveData>(UGameplayStatics::LoadGameFromSlot(USolanaWalletManager::GetSlotNamePath(SaveSlotName), 0));
 		if (!ensureAlways(IsValid(SaveData))) { return false; }
 
-		PublicKeys = SaveData->PublicKeys;
-		for (const auto& PublicKey : PublicKeys)
+		//PublicKeys = SaveData->PublicKeys;
+		PublicKeys.Empty();
+		for (const auto& PublicKey : SaveData->PublicKeys)
 		{
 			UWalletAccount* Account = NewObject<UWalletAccount>(this);
-			Account->AccountData.PublicKey = PublicKey;
+			Account->AccountData.PublicKey.SetKey(PublicKey);
 			Accounts.Add(PublicKey, Account);
+			PublicKeys.Add(Account->AccountData.PublicKey);
 		}
 	}
 	return true;
@@ -199,7 +201,11 @@ bool USolanaWallet::SaveWallet()
 
 	CurrentSaveData->Serialize(Ar);
 	SaveData->Data = FCryptoUtils::EncryptAES128GCM(SaveData->Data, CurrentPassword);
-	SaveData->PublicKeys = PublicKeys;
+	SaveData->PublicKeys.Empty();
+	for (const auto& PublicKey : PublicKeys)
+	{
+		SaveData->PublicKeys.Add(PublicKey.GetKey());
+	}
 	return UGameplayStatics::SaveGameToSlot(SaveData, USolanaWalletManager::GetSlotNamePath(SaveSlotName), 0);
 }
 
@@ -252,7 +258,7 @@ bool USolanaWallet::UnlockWallet(FString Password, FText& FailReason)
 	for (int32 i = 0; i < CurrentSaveData->Accounts.Num(); ++i)
 	{
 		const FAccount& AccountData = CurrentSaveData->Accounts[i];
-		const FString& PublicKey = AccountData.PublicKey;
+		const FString& PublicKey = AccountData.PublicKey.GetKey();
 		UWalletAccount* Account;
 		if (UWalletAccount* const* AccountPtr = Accounts.Find(PublicKey))
 		{
@@ -385,7 +391,7 @@ UWalletAccount* USolanaWallet::GenerateAccountFromGenIndex(int32 GenIndex)
 	AccountData.Name = FString::Printf(TEXT("Wallet %i"), Accounts.Num() + 1);
 	AccountData.GenIndex = GenIndex;
 	Account->AccountData = AccountData;
-	Accounts.Add(AccountData.PublicKey, Account);
+	Accounts.Add(AccountData.PublicKey.GetKey(), Account);
 	PublicKeys.Add(Account->AccountData.PublicKey);
 	return Account;
 }
@@ -439,7 +445,7 @@ UWalletAccount* USolanaWallet::ImportAccountFromPrivateKey(FString PrivateKey)
 		Account->AccountData = FAccount::FromPrivateKey(PrivateKey);
 	}
 	
-	Accounts.Add(Account->AccountData.PublicKey, Account);
+	Accounts.Add(Account->AccountData.PublicKey.GetKey(), Account);
 	PublicKeys.Add(Account->AccountData.PublicKey);
 	return Account;
 }
@@ -449,7 +455,7 @@ UWalletAccount* USolanaWallet::ImportAccountFromPublicKey(FString PublicKey)
 	UWalletAccount* Account = NewObject<UWalletAccount>(this);
 	Account->AccountData = FAccount::FromPublicKey(PublicKey);
 	Accounts.Add(PublicKey, Account);
-	PublicKeys.Add(PublicKey);
+	PublicKeys.Add(Account->AccountData.PublicKey);
 	return Account;
 }
 
@@ -460,7 +466,7 @@ void USolanaWallet::RemoveAccount(UWalletAccount* Account)
 		return;
 	}
 	
-	Accounts.Remove(Account->AccountData.PublicKey);
+	Accounts.Remove(Account->AccountData.PublicKey.GetKey());
 	PublicKeys.Remove(Account->AccountData.PublicKey);
 }
 
@@ -507,7 +513,15 @@ void USolanaWallet::UpdateAccounts()
     	return;
     }
 
-	FRequestData* Request = FRequestUtils::RequestMultipleAccounts(GetPublicKeys());
+	TArray<FPublicKey> publicKeys = GetPublicKeys();
+	TArray<FString> publicKeyStrs;
+
+	for (auto publicKey : publicKeys)
+	{
+		publicKeyStrs.Add(publicKey.GetKey());
+	}
+
+	FRequestData* Request = FRequestUtils::RequestMultipleAccounts(publicKeyStrs);
 	TArray<UWalletAccount*> CurrentAccounts = GetAccounts();
 	Request->Callback.BindLambda([this, CurrentAccounts](const FJsonObject& JsonResponse)
 	{
@@ -547,6 +561,11 @@ void USolanaWallet::InitMnemonic(const FMnemonic& InMnemonic)
 	Mnemonic = InMnemonic;
 	PublicKeys.Empty();
 	Accounts.Empty();
+	if (CurrentSaveData == nullptr)
+	{
+		CurrentSaveData = NewObject<UWalletData>();
+	}
+	
 	CurrentSaveData->Mnemonic = Mnemonic.Mnemonic;
 	SetDerivationPath(GetDerivationPaths()[0]);
 	OnMnemonicUpdated.Broadcast(Mnemonic.Mnemonic);

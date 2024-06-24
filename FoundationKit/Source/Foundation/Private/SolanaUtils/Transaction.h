@@ -17,15 +17,20 @@ Author: Jon Sawler
 */
 #pragma once
 
+#include "SolanaUtils/SolanaKey.h"
+
 struct FAccount;
 struct FAccountMeta;
 struct FInstructionData;
+struct FPublicKey;
 
 class FTransaction
 {
 public:
 
 	FTransaction(const FString& currentBlockHash);
+
+	void SetFeePayer(const FPublicKey& feePayer);
 
 	void AddInstruction(const FInstructionData& instruction);
 	void AddInstructions(const TArray<FInstructionData>& instructions);
@@ -36,6 +41,7 @@ public:
 	static TArray<uint8> Sign(const TArray<uint8>& message, const TArray<FAccount>& signers);
 
 private:
+	void AddAccountData(const FAccountMeta& accountMeta);
 
 	TArray<uint8> BuildMessage();
 	TArray<uint8> CompileInstructions();
@@ -43,12 +49,14 @@ private:
 	void UpdateAccountList(const TArray<FAccount>& signers);
 	void UpdateHeaderInfo(const FAccountMeta& accountMeta);
 
-	uint8 GetAccountIndex(const FString& key) const;
+	int GetAccountIndex(const FString& key) const;
 
 	TArray<FInstructionData> Instructions;
 	TArray<FAccountMeta> AccountList;
 
 	FString BlockHash;
+
+	FPublicKey FeePayer;
 
 	uint8 RequiredSignatures;
 	uint8 ReadOnlySignedAccounts;

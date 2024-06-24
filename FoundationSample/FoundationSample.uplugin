@@ -1,0 +1,24 @@
+{
+	"FileVersion": 1,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "FoundationSample",
+	"Description": "FoundationSample",
+	"Category": "Other",
+	"CreatedBy": "GGGSoft",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "FoundationSample",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

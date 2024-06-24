@@ -36,6 +36,7 @@ public:
 	
 	static bool RandomBytes(TArray<uint8>& Salt, int32 Length);
 
+	static TArray<uint8> ShortToDataArray(short integer);
 	static TArray<uint8> Int32ToDataArray(int32 integer);
 	static TArray<uint8> Int64ToDataArray(int64 integer);
 
@@ -51,4 +52,6 @@ public:
 
 	static TArray<uint8> EncryptAES128GCM(const TArray<uint8>& Data, const FString& Password);
 	static TArray<uint8> DecryptAES128GCM(const TArray<uint8>& EncryptedData, const FString& Password);
+
+	static bool IsOnCurve(const TArray<uint8>& PublicKey);
 };

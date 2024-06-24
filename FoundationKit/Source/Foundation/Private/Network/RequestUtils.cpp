@@ -21,7 +21,10 @@ Author: Jon Sawler
 #include "JsonObjectConverter.h"
 #include "Network/RequestManager.h"
 #include "Misc/MessageDialog.h"
+#include "Misc/EngineVersionComparison.h"
 #include "SolanaUtils/Utils/Types.h"
+
+
 
 static FText ErrorTitle = FText::FromString("Error");
 static FText InfoTitle = FText::FromString("Info");
@@ -192,7 +195,7 @@ FRequestData* FRequestUtils::SendTransaction(const FString& transaction)
 	FRequestData* request = new FRequestData(FRequestManager::GetNextMessageID());
 	
 	request->Body =
-		FString::Printf(TEXT(R"({"jsonrpc":"2.0","id":%d,"method":"sendTransaction","params":["%s",{"encoding": "base64"}]})")
+		FString::Printf(TEXT(R"({"jsonrpc":"2.0","id":%d,"method":"sendTransaction","params":["%s",{"encoding": "base64", "preflightCommitment": "confirmed"}]})")
 			,request->Id, *transaction );
 	
 	return request;
@@ -208,7 +211,7 @@ FRequestData* FRequestUtils::RequestBlockHash()
 	FRequestData* request = new FRequestData(FRequestManager::GetNextMessageID());
 	
 	request->Body =
-		FString::Printf(TEXT(R"({"id":%d,"jsonrpc":"2.0","method":"getRecentBlockhash","params":[{"commitment":"processed"}]})")
+		FString::Printf(TEXT(R"({"id":%d,"jsonrpc":"2.0","method":"getLatestBlockhash","params":[{"commitment": "finalized"}]})")
 				,request->Id );
 	
 	return request;
@@ -247,6 +250,24 @@ int FRequestUtils::ParseTransactionFeeAmountResponse(const FJsonObject& data)
 	return fee;
 }
 
+FRequestData* FRequestUtils::GetMinimumBalanceForRentExemption(const UINT& size)
+{
+	FRequestData* request = new FRequestData(FRequestManager::GetNextMessageID());
+
+	request->Body =
+		FString::Printf(TEXT(R"({"jsonrpc":"2.0","id":%d,"method":"getMinimumBalanceForRentExemption", "params":[%d, {"commitment": "finalized"}]})")
+			, request->Id, size);
+
+	return request;
+}
+
+int64 FRequestUtils::ParseMinimumBalanceForRentExemptionResponse(const FJsonObject& data)
+{
+	int64 value;
+	data.TryGetNumberField("result", value);
+	return value;
+}
+
 FRequestData* FRequestUtils::RequestAirDrop(const FString& pubKey)
 {
 	FRequestData* request = new FRequestData(FRequestManager::GetNextMessageID());
@@ -258,12 +279,108 @@ FRequestData* FRequestUtils::RequestAirDrop(const FString& pubKey)
 	return request;
 }
 
+FRequestData* FRequestUtils::GetSignatureStatuses(const FString& hash)
+{
+	FRequestData* request = new FRequestData(FRequestManager::GetNextMessageID());
+
+	request->Body =
+		FString::Printf(TEXT(R"({"jsonrpc":"2.0","id":%d, "method":"getSignatureStatuses", "params":[["%s"], {"searchTransactionHistory": false} ]})")
+			, request->Id, *hash);
+
+	return request;
+}
+
+bool FRequestUtils::ParseGetSignatureStatusesResponse(const FJsonObject& data)
+{
+	if (TSharedPtr<FJsonObject> result = data.GetObjectField("result"))
+	{
+		const TArray<TSharedPtr<FJsonValue>>& values = result->GetArrayField("value");
+		if (values.Num() > 0)
+		{
+			const TSharedPtr<FJsonObject>* valueObj = nullptr;
+			if (values[0]->TryGetObject(valueObj))
+			{
+				FString status;
+				if ((*valueObj)->TryGetStringField(TEXT("confirmationStatus"), status))
+				{
+					if (status == "finalized")
+					{
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
+class FConfirmTransactionUtils
+{
+public:
+	static const float TIME_OUT;
+
+	FConfirmTransactionUtils(FString hash, FDateTime startTime, FConfirmTransactionCallback callback)
+		:Hash(hash), StartTime(startTime), Callback(callback)
+	{
+	}
+
+	FString Hash;
+	FDateTime StartTime;
+	FConfirmTransactionCallback Callback;
+
+	static void SendGetSignatureStatuses(UWorld* world, FConfirmTransactionUtils ctu)
+	{
+		FRequestData* request = FRequestUtils::GetSignatureStatuses(ctu.Hash);
+		request->Callback.BindLambda([ctu, world](const FJsonObject& data)
+		{
+			bool ret = FRequestUtils::ParseGetSignatureStatusesResponse(data);
+			if (ret == true)
+			{
+				ctu.Callback.Execute(true);
+				return;
+			}
+			const FTimespan  passedTime = FDateTime::Now() - ctu.StartTime;
+			if (passedTime.GetTotalSeconds() >= FConfirmTransactionUtils::TIME_OUT)
+			{
+				ctu.Callback.Execute(false);
+				return;
+			}
+
+			FTimerHandle handle;
+			world->GetTimerManager().SetTimer(handle, [world, ctu]()
+			{
+				FConfirmTransactionUtils::SendGetSignatureStatuses(world, ctu);
+			}, 5.0f, false);
+		});
+
+		request->ErrorCallback.BindLambda([ctu](const FString& FailureReason)
+		{
+			ctu.Callback.Execute(false);
+		});
+		FRequestManager::SendRequest(request);
+	}
+};
+const float FConfirmTransactionUtils::TIME_OUT = 60;
+
+void FRequestUtils::ConfirmTransaction(UWorld* world, const FString& hash, FConfirmTransactionCallback callback)
+{
+	FConfirmTransactionUtils::SendGetSignatureStatuses(world, FConfirmTransactionUtils(hash, FDateTime::Now(), callback));
+}
+
 void FRequestUtils::DisplayError(const FString& error)
 {
+#if UE_VERSION_NEWER_THAN(5, 3, 0)
+	FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(error), ErrorTitle);
+#else
 	FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(error), &ErrorTitle);
+#endif
 }
 
 void FRequestUtils::DisplayInfo(const FString& info)
 {
+#if UE_VERSION_NEWER_THAN(5, 3, 0)
+	FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(info), InfoTitle);
+#else
 	FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(info), &InfoTitle);
+#endif
 }

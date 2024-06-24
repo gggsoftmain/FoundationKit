@@ -21,6 +21,7 @@ Contributers: Riccardo Torrisi, Federico Arona
 #include "SolanaWallet.h"
 #include "SolanaUtils/Account.h"
 #include "SolanaUtils/Wallet.h"
+#include "SolanaUtils/SolanaKey.h"
 #include "SolanaUtils/Utils/Types.h"
 #include "WalletAccount.generated.h"
 
@@ -59,7 +60,7 @@ public:
 	FString GetAccountName() const { return AccountData.Name; }
 
 	UFUNCTION(BlueprintPure)
-	FString GetPublicKey() const { return AccountData.PublicKey; }
+	FPublicKey GetPublicKey() const { return AccountData.PublicKey; }
 
 	UFUNCTION(BlueprintCallable)
 	void SetAccountName(const FString& Name);

@@ -22,11 +22,11 @@ Contributers: Daniele Calanna, Riccardo Torrisi
 #include "SolanaUtils/Utils/Types.h"
 #include "Crypto/Base58.h"
 #include "Crypto/CryptoUtils.h"
+#include "SolanaUtils/Mnemonic.h"
+#include "Crypto/FEd25519Bip39.h"
 
 FAccount::FAccount()
 {
-	PublicKeyData.SetNum(PublicKeySize);
-	PrivateKeyData.SetNum(PrivateKeySize);
 }
 
 TArray<uint8> FAccount::Sign(const TArray<uint8>& Transaction)
@@ -34,13 +34,21 @@ TArray<uint8> FAccount::Sign(const TArray<uint8>& Transaction)
 	TArray<uint8> Signature;
 	Signature.SetNum(PrivateKeySize);
 	TArray<uint8> Message;
-	FCryptoUtils::SignMessage(Signature, Transaction, PrivateKeyData);
+	FCryptoUtils::SignMessage(Signature, Transaction, PrivateKey.GetKeyData());
 	return Signature;
 }
 
 void FAccount::Verify(const TArray<uint8>& Transaction, const TArray<uint8>& Signature)
 {
-	FCryptoUtils::VerifyMessage(Signature, Transaction,PublicKeyData);
+	FCryptoUtils::VerifyMessage(Signature, Transaction, PublicKey.GetKeyData());
+}
+
+FAccount FAccount::Create()
+{
+	const FMnemonic mnemonic(24);
+	FEd25519Bip39 keypair(mnemonic.DeriveSeed());
+
+	return FAccount::FromSeed(keypair.DeriveAccountPath(0));
 }
 
 FAccount FAccount::FromSeed( const TArray<uint8>& Seed )
@@ -49,11 +57,7 @@ FAccount FAccount::FromSeed( const TArray<uint8>& Seed )
 	
 	FAccount newAccount;
 
-	FCryptoUtils::GenerateKeyPair(Seed,newAccount.PublicKeyData, newAccount.PrivateKeyData );
-
-	newAccount.PublicKey = FBase58::EncodeBase58(newAccount.PublicKeyData.GetData(), newAccount.PublicKeyData.Num());
-	newAccount.PrivateKey = FBase58::EncodeBase58(newAccount.PrivateKeyData.GetData(), newAccount.PrivateKeyData.Num());
-
+	FSolanaKey::GenerateKeyPair(Seed, newAccount.PublicKey, newAccount.PrivateKey);
 	return newAccount;
 }
 
@@ -61,15 +65,8 @@ FAccount FAccount::FromPrivateKey(const FString& privateKey)
 {
 	FAccount newAccount;
 
-	newAccount.PrivateKey = privateKey;
-	newAccount.PrivateKeyData = FBase58::DecodeBase58(privateKey);
-
-	for(int i = 0; i < PublicKeySize; i++)
-	{
-		newAccount.PublicKeyData[i] = newAccount.PrivateKeyData[i + PublicKeySize];
-	}
-
-	newAccount.PublicKey = FBase58::EncodeBase58(newAccount.PublicKeyData.GetData(), newAccount.PublicKeyData.Num());
+	newAccount.PrivateKey.SetKey(privateKey);
+	newAccount.PublicKey.SetKeyFromPrivate(newAccount.PrivateKey);
 
 	return newAccount;
 }
@@ -78,14 +75,8 @@ FAccount FAccount::FromPrivateKey( const TArray<uint8>& PrivateKey )
 {
 	FAccount newAccount;
 
-	newAccount.PrivateKeyData = PrivateKey;
-	for(int i = 0; i < PublicKeySize; i++)
-	{
-		newAccount.PublicKeyData[i] = PrivateKey[i + PublicKeySize];
-	}
-
-	newAccount.PublicKey = FBase58::EncodeBase58(newAccount.PublicKeyData.GetData(), newAccount.PublicKeyData.Num());
-	newAccount.PrivateKey = FBase58::EncodeBase58(newAccount.PrivateKeyData.GetData(), newAccount.PrivateKeyData.Num());
+	newAccount.PrivateKey.SetKeyData(PrivateKey);
+	newAccount.PublicKey.SetKeyFromPrivate(newAccount.PrivateKey);
 
 	return newAccount;
 }
@@ -94,8 +85,7 @@ FAccount FAccount::FromPublicKey(const FString& publicKey)
 {
 	FAccount newAccount;
 
-	newAccount.PublicKeyData = FBase58::DecodeBase58(publicKey);
-	newAccount.PublicKey = publicKey;
+	newAccount.PublicKey.SetKey(publicKey);
 
 	return newAccount;
 }
@@ -104,8 +94,7 @@ FAccount FAccount::FromPublicKey(const TArray<uint8>& publicKey)
 {
 	FAccount newAccount;
 
-	newAccount.PublicKeyData = publicKey;
-	newAccount.PublicKey = FBase58::EncodeBase58(newAccount.PublicKeyData.GetData(), newAccount.PublicKeyData.Num());
+	newAccount.PublicKey.SetKeyData(publicKey);
 
 	return newAccount;
 }

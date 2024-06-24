@@ -18,6 +18,7 @@ Contributers: Daniele Calanna, Riccardo Torrisi
 */
 #pragma once
 
+#include "SolanaUtils/SolanaKey.h"
 #include "Account.generated.h"
 
 USTRUCT(BlueprintType)
@@ -34,15 +35,15 @@ struct FOUNDATION_API FAccount
 	int32 GenIndex = -1;
 
 	UPROPERTY(SaveGame, BlueprintReadOnly)
-	FString PublicKey;
-	UPROPERTY(SaveGame, BlueprintReadOnly)
-	FString PrivateKey;
+	FPublicKey PublicKey;
 
-	TArray<uint8> PublicKeyData;
-	TArray<uint8> PrivateKeyData;
+	UPROPERTY(SaveGame, BlueprintReadOnly)
+	FPrivateKey PrivateKey;
 
 	TArray<uint8> Sign(const TArray<uint8>& Transaction);
 	void Verify(const TArray<uint8>& Transaction, const TArray<uint8>& Signature);
+
+	static FAccount Create();
 
 	static FAccount FromSeed(const TArray<uint8>& Seed);
 

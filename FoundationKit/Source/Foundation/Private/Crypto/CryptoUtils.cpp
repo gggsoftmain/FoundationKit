@@ -18,7 +18,7 @@ Author: Jon Sawler
 #include "CryptoUtils.h"
 
 #include "Crypto/ed25519/ed25519.h"
-
+#include "Crypto/BigIntExtension.h"
 #define UI UI_ST
 THIRD_PARTY_INCLUDES_START
 #include <openssl/aes.h>
@@ -134,6 +134,15 @@ bool FCryptoUtils::RandomBytes(TArray<uint8>& Salt, int32 Length)
 
 	return (Length == 0);
 }
+
+TArray<uint8> FCryptoUtils::ShortToDataArray(short integer)
+{
+	TArray<uint8> result;
+	result.Add((integer & 0xff));
+	result.Add((integer >> 8) & 0xff);
+	return result;
+}
+
 
 TArray<uint8> FCryptoUtils::Int32ToDataArray(int32 integer)
 {
@@ -343,4 +352,9 @@ TArray<uint8> FCryptoUtils::DecryptAES128GCM(const TArray<uint8>& EncryptedData,
 
 	TArray<uint8> DecryptedData(plain.data(), plain.size());
 	return DecryptedData;
+}
+
+bool FCryptoUtils::IsOnCurve(const TArray<uint8>& PublicKey)
+{
+	return TBigIntExtension::IsOnCurve(PublicKey);
 }

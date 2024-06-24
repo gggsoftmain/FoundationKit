@@ -21,6 +21,7 @@ Contributers: Riccardo Torrisi, Federico Arona
 #include "GameFramework/SaveGame.h"
 #include "SolanaUtils/Account.h"
 #include "SolanaUtils/Mnemonic.h"
+#include "SolanaUtils/SolanaKey.h"
 #include "SolanaWallet.generated.h"
 
 class UWalletAccount;
@@ -248,7 +249,7 @@ public:
 
 	// Get public keys of the accounts in this wallet.
 	UFUNCTION(BlueprintPure, Category="Account")
-	TArray<FString> GetPublicKeys() const { return PublicKeys; }
+	TArray<FPublicKey> GetPublicKeys() const { return PublicKeys; }
 
 	// Update balance and info for all accounts
 	UFUNCTION(BlueprintCallable, Category="Account")
@@ -286,7 +287,7 @@ private:
 	FString CurrentPassword;
 
 	UPROPERTY()
-	TArray<FString> PublicKeys;
+	TArray< FPublicKey > PublicKeys;
 
 	static FText WalletLockedText;
 	static FText InvalidMnemonic;

@@ -17,31 +17,27 @@ Author: Jon Sawler
 */
 #pragma once
 #include "Crypto/Base58.h"
+#include "SolanaUtils/SolanaKey.h"
 #include "SolanaUtils/Utils/Types.h"
+#include "Nft/NFTMetadata.h"
 
 struct FAccount;
 
 struct FAccountMeta
 {
-	FAccountMeta(const TArray<uint8>& publicKeyData, bool signer, bool writable)
-		: PublicKey(FBase58::EncodeBase58(publicKeyData.GetData(),publicKeyData.Num())),
-			PublicKeyData(publicKeyData), Signer(signer), Writable(writable)
+	FAccountMeta(const FPublicKey& publicKey, bool signer, bool writable)
+		: PublicKey(publicKey), Signer(signer), Writable(writable)
 	{
-		if( PublicKeyData.Num() < PublicKeySize )
-		{
-			PublicKeyData.AddZeroed( PublicKeySize - PublicKeyData.Num() );
-		}
 	}
 	
-	FString PublicKey;
-	TArray<uint8> PublicKeyData;
+	FPublicKey PublicKey;
 	bool Signer;
 	bool Writable;
 };
 
 struct FInstructionData
 {
-	TArray<uint8> ProgramId;
+	FPublicKey ProgramId;
 	TArray<FAccountMeta> Keys;
 	TArray<uint8> Data;
 };
@@ -52,7 +48,18 @@ public:
 
 	static FInstructionData TransferLamports(const FAccount& from, const FAccount& to, int64 lamports);
 	static FInstructionData CreateAccount(const FAccount& from, const FAccount& newAccount, int64 rent);
-
-	static FInstructionData InitializeTokenAccount(const FAccount& account, const TArray<uint8>& mint, const FAccount& owner);
+	
+	static FInstructionData InitializeTokenAccount(const FAccount& account, const FPublicKey& mint, const FAccount& owner);
 	static FInstructionData TransferTokens(const FAccount& from, const FAccount& to, const FAccount& owner, int64 amount);
+
+	static FInstructionData CreateSystemAccount(const FAccount& from, const FAccount& newAccount, int64 rent, int64 accountDataSize);
+	static FInstructionData CreateSystemAccount(const FPublicKey& from, const FPublicKey& newAccount, int64 rent, int64 accountDataSize, const FPublicKey& programId);
+
+	static FInstructionData TokenProgramInitializeMint(const FPublicKey& mint, int decimals, const FPublicKey& mintAuthority, const FPublicKey* freezeAuthority);
+	static FInstructionData TokenProgramMintTo(const FPublicKey& mint, const FPublicKey& destination, int64 amount, const FPublicKey& mintAuthority);
+
+	static FInstructionData CreateAssociatedTokenAccount(const FPublicKey& payer, const FPublicKey& owner, const FPublicKey& mint);
+
+	static FInstructionData CreateMetadataAccount(const FPublicKey& metadataPDA, const FPublicKey& mint, const FPublicKey& authority, const FPublicKey& payer, const FPublicKey& updateAuthority, const FNFTMetadata& data, bool isMutable, bool updateAuthorityIsSigner, uint64 collectionDetails = 0);
+	static FInstructionData CreateMasterEdition(const FPublicKey& masterEditionPAD, const FPublicKey& mintKey, const FPublicKey& payer,	const FPublicKey& updateAuthority, const FPublicKey& mintAuthority, const FPublicKey& metadataPDA);
 };

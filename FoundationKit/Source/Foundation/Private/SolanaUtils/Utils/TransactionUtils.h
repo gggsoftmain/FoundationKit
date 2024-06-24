@@ -18,6 +18,8 @@ Author: Jon Sawler
 #pragma once
 
 struct FAccount;
+struct FPublicKey;
+struct FNFTMetadata;
 
 class FTransactionUtils
 {
@@ -25,4 +27,7 @@ public:
 	
 	static TArray<uint8> TransferTokenTransaction(const FAccount& from, const FAccount& to, const FAccount& owner, int64 amount, const FString& mint, const FString& blockHash, const FString& existingAccount);
 	static TArray<uint8> TransferSOLTransaction(const FAccount& from, const FAccount& to, int64 amount, const FString& blockHash);
+
+	// nft
+	static TArray<uint8> MintingTransaction(const FAccount& owner, const FAccount& mint, const FPublicKey& associatedTokenAccount, int64 minimumRent, const FString& blockHash, const FNFTMetadata& metadata);
 };
