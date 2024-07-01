@@ -85,5 +85,5 @@ class FOUNDATION_API UCandyMachineConfigurationTable : public UDataAsset {
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TableRow")
-	TArray<FCandyMachineConfiguration> m_LabyrinthStages;
+	TArray<FCandyMachineConfiguration> m_CandyMachineConfigurations;
 };
